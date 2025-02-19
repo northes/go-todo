@@ -1,82 +1,82 @@
 package config
 
 import (
-	"database/sql"
-	"errors"
-	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/ichtrojan/thoth"
-	_ "github.com/joho/godotenv/autoload"
-	"log"
-	"os"
+ "database/sql"
+ _ "github.com/go-sql-driver/mysql"
+ _ "github.com/joho/godotenv/autoload"
+ "github.com/rs/zerolog/log"
+ "os"
+ "time"
 )
 
 func Database() *sql.DB {
-	logger, _ := thoth.Init("log")
+ user, exist := os.LookupEnv("MYSQL_USER")
 
-	user, exist := os.LookupEnv("MYSQL_USER")
+ if !exist {
+  log.Fatal().Msg("MYSQL_USER not set in .env")
+ }
 
-	if !exist {
-		logger.Log(errors.New("MYSQL_USER not set in .env"))
-		log.Fatal("MYSQL_USER not set in .env")
-	}
+ pass, exist := os.LookupEnv("MYSQL_PASSWORD")
 
-	pass, exist := os.LookupEnv("MYSQL_PASSWORD")
+ if !exist {
+  log.Fatal().Msg("MYSQL_PASSWORD not set in .env")
+ }
 
-	if !exist {
-		logger.Log(errors.New("MYSQL_PASSWORD not set in .env"))
-		log.Fatal("MYSQL_PASSWORD not set in .env")
-	}
+ host, exist := os.LookupEnv("MYSQL_HOST")
 
-	host, exist := os.LookupEnv("MYSQL_HOST")
-
-	if !exist {
-		logger.Log(errors.New("MYSQL_HOST not set in .env"))
-		log.Fatal("MYSQL_HOST not set in .env")
-	}
+ if !exist {
+  log.Fatal().Msg("MYSQL_HOST not set in .env")
+ }
 
 	port, exist := os.LookupEnv("MYSQL_PORT")
 
-	if !exist {
-		logger.Log(errors.New("MYSQL_PORT not set in .env"))
-		log.Fatal("MYSQL_PORT not set in .env")
-	}
+ if !exist {
+  log.Fatal().Msg("MYSQL_PORT not set in .env")
+ }
 
-	credentials := fmt.Sprintf("%s:%s@(%s:%s)/?charset=utf8&parseTime=True", user, pass, host, port)
+ credentials := user + ":" + pass + "@(" + host + ":" + port + ")/?charset=utf8&parseTime=True"
 
-	database, err := sql.Open("mysql", credentials)
+ start := time.Now()
+ database, err := sql.Open("mysql", credentials)
 
-	if err != nil {
-		logger.Log(err)
-		log.Fatal(err)
-	} else {
-		fmt.Println("Database Connection Successful")
-	}
+ if err != nil {
+  log.Fatal().Err(err).
+   Str("host", host).
+   Str("port", port).
+   Str("user", user).
+   Msg("Failed to connect to database")
+ }
 
-	_, err = database.Exec(`CREATE DATABASE gotodo`)
+ log.Info().
+  Dur("duration", time.Since(start)).
+  Str("host", host).
+  Str("port", port).
+  Msg("Database connection successful")
 
-	if err != nil {
-		fmt.Println(err)
-	}
+ _, err = database.Exec(`CREATE DATABASE gotodo`)
 
-	_, err = database.Exec(`USE gotodo`)
+ if err != nil {
+  log.Warn().Err(err).Msg("Failed to create database gotodo")
+ }
 
-	if err != nil {
-		fmt.Println(err)
-	}
+ _, err = database.Exec(`USE gotodo`)
 
-	_, err = database.Exec(`
-		CREATE TABLE todos (
-		    id INT AUTO_INCREMENT,
-		    item TEXT NOT NULL,
-		    completed BOOLEAN DEFAULT FALSE,
-		    PRIMARY KEY (id)
-		);
-	`)
+ if err != nil {
+  log.Error().Err(err).Msg("Failed to use database gotodo")
+ }
 
-	if err != nil {
-		fmt.Println(err)
-	}
+ _, err = database.Exec(`
+  CREATE TABLE todos (
+      id INT AUTO_INCREMENT,
+      item TEXT NOT NULL,
+      completed BOOLEAN DEFAULT FALSE,
+      PRIMARY KEY (id)
+  );
+ `)
 
-	return database
+ if err != nil {
+  log.Warn().Err(err).Msg("Failed to create todos table")
+ }
+
+ return database
 }
